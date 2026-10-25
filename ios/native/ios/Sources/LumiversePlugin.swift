@@ -198,14 +198,21 @@ class LumiversePlugin: Plugin, UIGestureRecognizerDelegate {
         sheet.addAction(measure)
         #endif
         sheet.addAction(UIAlertAction(title: "Change server", style: .default) { [weak self] _ in
-            guard let self = self else { return }
-            var components = URLComponents(url: self.connectionURL, resolvingAgainstBaseURL: false)!
-            components.queryItems = [URLQueryItem(name: "changeServer", value: "1")]
-            self.webview?.load(URLRequest(url: components.url!))
+            self?.showConnectionPage()
+        })
+        sheet.addAction(UIAlertAction(title: "Connection history", style: .default) { [weak self] _ in
+            self?.showConnectionPage(history: true)
         })
         sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         anchor(sheet.popoverPresentationController, at: point, in: webview)
         controller.present(sheet, animated: true)
+    }
+
+    private func showConnectionPage(history: Bool = false) {
+        var components = URLComponents(url: connectionURL, resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "changeServer", value: "1")]
+        if history { components.queryItems?.append(URLQueryItem(name: "history", value: "1")) }
+        webview?.load(URLRequest(url: components.url!))
     }
 
     private func anchor(_ popover: UIPopoverPresentationController?, at point: CGPoint, in webview: WKWebView) {

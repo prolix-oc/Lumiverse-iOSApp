@@ -1,5 +1,7 @@
 mod client;
+mod connections;
 
+use connections::ConnectionInfo;
 use std::sync::Mutex;
 use tauri::{Manager, State, Url, WebviewWindow};
 
@@ -9,14 +11,6 @@ struct ConnectionState {
     connect: tokio::sync::Mutex<()>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ConnectionInfo {
-    server: Option<String>,
-    #[serde(default)]
-    allow_insecure_http: bool,
-}
-
 fn settings_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     app.path().app_data_dir().map(|path| path.join("connection.json")).map_err(|error| error.to_string())
 }
@@ -24,11 +18,16 @@ fn settings_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
 fn saved_connection(app: &tauri::AppHandle) -> Option<ConnectionInfo> {
     std::fs::read(settings_path(app).ok()?).ok()
         .and_then(|bytes| serde_json::from_slice::<ConnectionInfo>(&bytes).ok())
-        .and_then(|saved| {
-            let server = client::normalize_server(saved.server.as_deref()?, saved.allow_insecure_http).ok()?;
-            Some(ConnectionInfo { allow_insecure_http: server.scheme() == "http" && saved.allow_insecure_http,
-                server: Some(server.as_str().into()) })
-        })
+        .map(ConnectionInfo::sanitized)
+}
+
+fn save_connection(app: &tauri::AppHandle, info: &ConnectionInfo) -> Result<(), String> {
+    let path = settings_path(app)?;
+    std::fs::create_dir_all(path.parent().unwrap()).map_err(|error| error.to_string())?;
+    let pending = path.with_extension("pending");
+    let bytes = serde_json::to_vec(info).map_err(|error| error.to_string())?;
+    std::fs::write(&pending, bytes).map_err(|error| error.to_string())?;
+    std::fs::rename(pending, path).map_err(|error| error.to_string())
 }
 
 fn require_connection_page(window: &WebviewWindow) -> Result<(), String> {
@@ -39,7 +38,18 @@ fn require_connection_page(window: &WebviewWindow) -> Result<(), String> {
 #[tauri::command]
 fn mobile_connection_info(window: WebviewWindow, app: tauri::AppHandle) -> Result<ConnectionInfo, String> {
     require_connection_page(&window)?;
-    Ok(saved_connection(&app).unwrap_or(ConnectionInfo { server: None, allow_insecure_http: false }))
+    Ok(saved_connection(&app).unwrap_or_default().sanitized())
+}
+
+#[tauri::command]
+async fn mobile_forget_connection(window: WebviewWindow, app: tauri::AppHandle, state: State<'_, ConnectionState>, server: String) -> Result<ConnectionInfo, String> {
+    require_connection_page(&window)?;
+    let _connection = state.connect.lock().await;
+    require_connection_page(&window)?;
+    let mut info = saved_connection(&app).unwrap_or_default().sanitized();
+    info.forget(client::normalize_server(&server, true)?.as_str());
+    save_connection(&app, &info)?;
+    Ok(info)
 }
 
 #[tauri::command]
@@ -54,13 +64,9 @@ async fn mobile_connect(window: WebviewWindow, app: tauri::AppHandle, state: Sta
     let cached = tauri_plugin_lumiverse_ios::cache_available(&app).await;
     if !restoring || !cached { tauri_plugin_lumiverse_ios::probe_server(&app, server.as_str()).await?; }
     // The saved address is separate from the server's cookies and account data.
-    let path = settings_path(&app)?;
-    std::fs::create_dir_all(path.parent().unwrap()).map_err(|error| error.to_string())?;
-    let pending = path.with_extension("pending");
-    let bytes = serde_json::to_vec(&ConnectionInfo { server: Some(server.as_str().into()),
-        allow_insecure_http: server.scheme() == "http" && allow_insecure_http == Some(true) }).unwrap();
-    std::fs::write(&pending, bytes).map_err(|error| error.to_string())?;
-    std::fs::rename(pending, path).map_err(|error| error.to_string())?;
+    let mut info = saved_connection(&app).unwrap_or_default().sanitized();
+    info.remember(&server, allow_insecure_http == Some(true));
+    save_connection(&app, &info)?;
     *state.server.lock().unwrap() = Some(server.clone());
     if cached && tauri_plugin_lumiverse_ios::load_cached(&app, server.as_str()).await { return Ok(()); }
     if restoring && cached { tauri_plugin_lumiverse_ios::probe_server(&app, server.as_str()).await?; }
@@ -78,7 +84,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(ConnectionState::default())
         .plugin(tauri_plugin_lumiverse_ios::init())
-        .invoke_handler(tauri::generate_handler![mobile_connection_info, mobile_connect])
+        .invoke_handler(tauri::generate_handler![mobile_connection_info, mobile_connect, mobile_forget_connection])
         .plugin(tauri::plugin::Builder::<tauri::Wry>::new("connection-policy").on_navigation(|webview, url| {
             let state = webview.state::<ConnectionState>();
             let server = state.server.lock().unwrap();

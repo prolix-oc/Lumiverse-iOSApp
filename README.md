@@ -4,6 +4,12 @@ Native Swift/Rust client, widgets, Live Activities, notification extension, and
 app build/verification tools. The app connects to a Lumiverse server; it does
 not bundle the server. The `ios/` directory keeps the native project layout.
 
+The connection screen has a collapsible **Connection history** list of the ten
+most recent successful servers saved on this device. Select an address, then tap
+**Connect**. **Remove** deletes an entry from history. While connected, hold two
+fingers on the screen and choose **Connection history** in app controls to open
+the list. VoiceOver and Switch Control users can use the **App controls** button.
+
 ## Setup and build
 
 Use Bun 1.4.2, Node.js, Rust/rustup, Xcode, and XcodeGen on macOS. Install Rust

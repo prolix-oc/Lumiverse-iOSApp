@@ -4,6 +4,7 @@ import { JSDOM } from 'jsdom'
 
 const html = readFileSync(new URL('../ios/tauri/ui/index.html', import.meta.url), 'utf8')
 const script = readFileSync(new URL('../ios/tauri/ui/connection.js', import.meta.url), 'utf8')
+const historyScript = readFileSync(new URL('../ios/tauri/ui/connection-history.js', import.meta.url), 'utf8')
 const windows: JSDOM[] = []
 
 afterEach(() => {
@@ -18,13 +19,13 @@ function deferred<T>() {
 }
 
 function connectionPage(query = '') {
-  const saved = deferred<{ server: string | null; allowInsecureHttp?: boolean }>()
+  const saved = deferred<{ server: string | null; allowInsecureHttp?: boolean; history?: { server: string; allowInsecureHttp?: boolean }[] }>()
   const connected = deferred<void>()
   const invoke = mock((command: string) => command === 'mobile_connection_info' ? saved.promise : connected.promise)
   const dom = new JSDOM(html, { url: `https://tauri.localhost/index.html${query}`, runScripts: 'outside-only' })
   windows.push(dom)
   Object.assign(dom.window, { __TAURI_INTERNALS__: { invoke } })
-  dom.window.eval(`(() => {\n${script}\n})()`)
+  dom.window.eval(`(() => {\n${historyScript}\n${script}\n})()`)
   const element = <T extends HTMLElement>(id: string) => dom.window.document.getElementById(id) as T
   return {
     dom, saved, connected, invoke,
@@ -156,4 +157,68 @@ test('an old HTTP setting without consent stays on setup without connecting', as
   expect(page.setup.hidden).toBe(false)
   expect(page.allowInsecureHttp.checked).toBe(false)
   expect(page.invoke).toHaveBeenCalledTimes(1)
+})
+
+test('history stays collapsed and selecting a previous server fills the form without connecting', async () => {
+  const page = connectionPage('?changeServer=1')
+  page.saved.resolve({ server: 'https://current.example/', history: [
+    { server: 'https://current.example/' }, { server: 'https://previous.example:8443/' },
+  ] })
+  await flush()
+  const details = page.dom.window.document.querySelector('details')!
+  expect(details.open).toBe(false)
+  expect(page.dom.window.document.getElementById('history-count')!.textContent).toBe(' (2)')
+  details.open = true
+  const choices = page.dom.window.document.querySelectorAll<HTMLButtonElement>('.history-server')
+  expect(choices[1]!.textContent).toContain('previous.example:8443')
+  choices[1]!.click()
+  expect(page.server.value).toBe('https://previous.example:8443/')
+  expect(page.invoke).toHaveBeenCalledTimes(1)
+  submit(page)
+  expect(choices[0]!.disabled).toBe(true)
+  expect(page.invoke).toHaveBeenLastCalledWith('mobile_connect', { server: 'https://previous.example:8443/', restore: false, allowInsecureHttp: false })
+  page.connected.reject(new Error('Offline'))
+  await flush()
+  expect(choices[0]!.disabled).toBe(false)
+  expect(page.dom.window.document.querySelectorAll('.history-server')).toHaveLength(2)
+})
+
+test('history shortcut expands the list and restores HTTP consent only for the selected saved origin', async () => {
+  const page = connectionPage('?changeServer=1&history=1')
+  page.saved.resolve({ server: 'https://current.example/', history: [{ server: 'http://lan.local:8000/', allowInsecureHttp: true }] })
+  await flush()
+  expect(page.dom.window.document.querySelector('details')!.open).toBe(true)
+  page.dom.window.document.querySelector<HTMLButtonElement>('.history-server')!.click()
+  expect(page.httpSettings.hidden).toBe(false)
+  expect(page.allowInsecureHttp.checked).toBe(true)
+  enterServer(page, 'http://lan.local:8001/')
+  expect(page.allowInsecureHttp.checked).toBe(false)
+})
+
+test('removing history persists natively, does not connect, and preserves the entered address', async () => {
+  const page = connectionPage('?changeServer=1&history=1')
+  page.saved.resolve({ server: 'https://current.example/', history: [{ server: 'https://old.example/' }] })
+  await flush()
+  page.invoke.mockImplementation(async () => ({ history: [] }) as any)
+  page.dom.window.document.querySelector<HTMLButtonElement>('.history-remove')!.click()
+  submit(page)
+  expect(page.invoke).toHaveBeenLastCalledWith('mobile_forget_connection', { server: 'https://old.example/' })
+  await flush()
+  expect(page.server.value).toBe('https://current.example/')
+  expect(page.dom.window.document.querySelectorAll('.history-server')).toHaveLength(0)
+  expect(page.dom.window.document.getElementById('history-empty')!.hidden).toBe(false)
+  expect(page.status.textContent).toBe('Server removed from history.')
+})
+
+test('a failed removal keeps the history available for retry', async () => {
+  const page = connectionPage('?changeServer=1&history=1')
+  page.saved.resolve({ server: 'https://current.example/', history: [{ server: 'https://old.example/' }] })
+  await flush()
+  page.invoke.mockImplementation(async () => { throw new Error('Storage unavailable') })
+  const remove = page.dom.window.document.querySelector<HTMLButtonElement>('.history-remove')!
+  remove.click()
+  await flush()
+  expect(page.dom.window.document.querySelectorAll('.history-server')).toHaveLength(1)
+  expect(remove.disabled).toBe(false)
+  expect(page.status.textContent).toContain('Could not remove this server')
 })
