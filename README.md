@@ -9,6 +9,26 @@ most recent successful servers saved on this device. Select an address, then tap
 **Connect**. **Remove** deletes an entry from history. While connected, hold two
 fingers on the screen and choose **Connection history** in app controls to open
 the list. VoiceOver and Switch Control users can use the **App controls** button.
+The native wrapper cancels page touch handlers as soon as the second finger
+lands and suppresses the page's context menu. Keep both fingers still for 650 ms
+to open app controls. Single-finger actions and native scrolling/pinch zoom
+remain available.
+
+On iOS 16 and later, **Resume last chat** and **Open favorites** are available
+through Siri, Spotlight, and Shortcuts (including an assigned Action button).
+They use the selected server and wait for sign-in/startup settings. Resume uses
+the last chat opened on this device for that server/account; with no saved chat,
+it opens Home. Navigation requests expire after ten minutes. These shortcuts
+ship in ordinary builds and do not require push notifications or widgets.
+
+The updated server frontend uses native iPhone haptics for long-press menus and
+hold-to-queue. Completed exports offer **Share…**, plus **Preview** for formats
+supported by Quick Look, while keeping the saved copy in Files.
+
+Extension authorization and provider PKCE sign-in open in a native browser
+window inside the app. Redirects retain the browser session, and the window
+closes when authorization finishes. Use its Close button to cancel and return
+to Lumiverse. This requires rebuilding the iOS app.
 
 ## Setup and build
 
@@ -48,6 +68,7 @@ bun run test
 bun run test:release
 bun run typecheck
 bun run test:native --simulator SIMULATOR_UUID
+bun run test:browser-windows --simulator SIMULATOR_UUID
 ```
 
 Swift unit checks require macOS/Xcode. Device/simulator smoke tests are under

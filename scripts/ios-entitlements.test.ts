@@ -1,5 +1,21 @@
 import { expect, test } from "bun:test";
-import { configureIOSBundleIdentity, configureIOSPushEntitlements, configureIOSNotificationExtension, configureIOSLiveActivityExtension, configureIOSWidgetExtension } from "./ios-entitlements";
+import { configureIOSBundleIdentity, configureIOSPushEntitlements, configureIOSNotificationExtension, configureIOSLiveActivityExtension, configureIOSWidgetExtension, configureIOSNavigationShortcuts } from "./ios-entitlements";
+
+test("navigation shortcut metadata ships once in ordinary and push builds without raising iOS 15 deployment", () => {
+  let spec = `targets:
+  lumiverse-ios-client_iOS:
+    deploymentTarget: "15.0"
+    sources:
+      - path: lumiverse-ios-client_iOS
+`;
+  for (let i = 0; i < 3; i++) {
+    spec = configureIOSNavigationShortcuts(spec);
+    const host = (Bun.YAML.parse(spec) as any).targets['lumiverse-ios-client_iOS'];
+    expect(host.deploymentTarget).toBe('15.0');
+    expect(host.sources.filter((s: any) => s.path === '../../../../navigation-intents')).toHaveLength(1);
+    expect(host.sources.filter((s: any) => s.path === '../../../../native/ios/Sources/NavigationShortcutInbox.swift')).toHaveLength(1);
+  }
+});
 
 test("self-built IPAs replace the generated host identity and signing groups together", () => {
   let spec = `settingGroups:

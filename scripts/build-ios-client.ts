@@ -2,7 +2,7 @@
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { zipSync, type Zippable } from "fflate";
-import { configureIOSBundleIdentity, configureIOSPushEntitlements, configureIOSNotificationExtension, configureIOSLiveActivityExtension, configureIOSWidgetExtension } from "./ios-entitlements";
+import { configureIOSBundleIdentity, configureIOSPushEntitlements, configureIOSNotificationExtension, configureIOSLiveActivityExtension, configureIOSWidgetExtension, configureIOSNavigationShortcuts } from "./ios-entitlements";
 import { buildIOSNativeCache } from "./build-ios-native-cache";
 import { assertIOSPlatformEncryption, configureIOSDistribution, iosDistributionOptions, iosExportOptions } from "./ios-distribution";
 import { flattenIOSAppIcons } from "./ios-icons";
@@ -125,6 +125,7 @@ spec = configureIOSPushEntitlements(spec, pushNotifications);
 spec = configureIOSNotificationExtension(spec, pushNotifications);
 spec = configureIOSLiveActivityExtension(spec, pushNotifications);
 spec = configureIOSWidgetExtension(spec, widgets);
+spec = configureIOSNavigationShortcuts(spec);
 writeFileSync(specPath, spec);
 await run(["xcodegen", "generate", "--spec", "project.yml"], generated);
 if (args.has("--prepare-only")) process.exit(0);

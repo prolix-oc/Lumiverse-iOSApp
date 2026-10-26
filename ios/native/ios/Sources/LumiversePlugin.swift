@@ -3,7 +3,7 @@ import UIKit
 import WebKit
 
 /// UIKit controls and a narrowly scoped WebKit permission bridge.
-class LumiversePlugin: Plugin, UIGestureRecognizerDelegate {
+class LumiversePlugin: Plugin {
     struct ActivityURL: Decodable { let url: String }
     @objc public func openWidgetURL(_ invoke: Invoke) throws {
         let args = try invoke.parseArgs(ActivityURL.self)
@@ -20,7 +20,7 @@ class LumiversePlugin: Plugin, UIGestureRecognizerDelegate {
     private var downloads: NativeDownloads?
     private weak var webview: WKWebView?
     private var observation: NSKeyValueObservation?
-    private var menuGesture: UILongPressGestureRecognizer?
+    private var menuGesture: AppControlsGesture?
     private var accessibilityButton: UIButton?
     private var connectionURL = URL(string: "tauri://localhost/index.html")!
     #if LUMIVERSE_DEBUG || LUMIVERSE_EXPERIMENTAL_HIGH_REFRESH
@@ -56,11 +56,7 @@ class LumiversePlugin: Plugin, UIGestureRecognizerDelegate {
             }
         }
         #endif
-        let gesture = UILongPressGestureRecognizer(target: self, action: #selector(openControls(_:)))
-        gesture.numberOfTouchesRequired = 2
-        gesture.minimumPressDuration = 0.65
-        gesture.allowableMovement = 18
-        gesture.delegate = self
+        let gesture = AppControlsGesture { [weak self] point in self?.showControls(at: point) }
         webview.addGestureRecognizer(gesture)
         menuGesture = gesture
 
@@ -134,17 +130,6 @@ class LumiversePlugin: Plugin, UIGestureRecognizerDelegate {
             connectionURL = components.url!
         }
         if let button = accessibilityButton { webview?.bringSubviewToFront(button) }
-    }
-
-    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
-        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        // WebKit's own recognizers should keep normal scrolling and zooming.
-        gestureRecognizer === menuGesture || otherGestureRecognizer === menuGesture
-    }
-
-    @objc private func openControls(_ gesture: UILongPressGestureRecognizer) {
-        guard gesture.state == .began, let webview = webview else { return }
-        showControls(at: gesture.location(in: webview))
     }
 
     @objc private func openAccessibleControls() {

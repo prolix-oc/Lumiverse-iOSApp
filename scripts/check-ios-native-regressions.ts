@@ -16,16 +16,24 @@ const specification = {
   targets: {
     NativeRegressionHost: {
       type: 'application', platform: 'iOS',
-      sources: [resolve(root, 'ios/native-regression-tests/Host')],
+      sources: [resolve(root, 'ios/native-regression-tests/Host'), resolve(root, 'ios/native/ios/Sources/AppControlsGesture.swift'),
+        { path: resolve(root, 'ios/native/src/mobile-init.js'), buildPhase: 'resources' }],
       settings: { base: { PRODUCT_BUNDLE_IDENTIFIER: 'chat.lumiverse.native-regression-host' } },
     },
     NativeRegressions: {
       type: 'bundle.unit-test', platform: 'iOS',
       sources: [{ path: resolve(root, 'ios/native-regression-tests'), excludes: ['Host'] },
-        ...['LiveActivityHandoff', 'WebViewRendering'].map(file => resolve(root, `ios/native/ios/Sources/${file}.swift`))],
+        ...['LiveActivityHandoff', 'WebViewRendering', 'NativeExportPresenter', 'NavigationShortcutInbox'].map(file => resolve(root, `ios/native/ios/Sources/${file}.swift`)),
+        resolve(root, 'ios/navigation-intents')],
       dependencies: [{ target: 'NativeRegressionHost' }],
       settings: { base: { PRODUCT_BUNDLE_IDENTIFIER: 'chat.lumiverse.native-regressions' } },
-      scheme: { testTargets: ['NativeRegressions'] },
+      scheme: { testTargets: ['NativeRegressions', 'ControlsGestureRegressions'] },
+    },
+    ControlsGestureRegressions: {
+      type: 'bundle.ui-testing', platform: 'iOS',
+      sources: [resolve(root, 'ios/controls-gesture-tests')],
+      dependencies: [{ target: 'NativeRegressionHost' }],
+      settings: { base: { PRODUCT_BUNDLE_IDENTIFIER: 'chat.lumiverse.controls-gesture-regressions' } },
     },
   },
 }
@@ -44,9 +52,9 @@ for (const command of [
 const report = Bun.spawn(['xcrun', 'xcresulttool', 'get', 'test-results', 'summary', '--path', resultBundle],
   { env, stdout: 'pipe', stderr: 'inherit' })
 const summary = JSON.parse(await new Response(report.stdout).text())
-if (await report.exited !== 0 || summary.result !== 'Passed' || summary.passedTests !== 3 || summary.skippedTests !== 0)
-  throw new Error('The three native regressions must actually execute and pass')
+if (await report.exited !== 0 || summary.result !== 'Passed' || summary.passedTests !== 9 || summary.skippedTests !== 0)
+  throw new Error('The nine native regressions must actually execute and pass')
 const out = resolve(root, 'dist/ios')
 mkdirSync(out, { recursive: true })
 writeFileSync(resolve(out, 'native-regressions.json'), JSON.stringify({ ...summary, resultBundle }, null, 2) + '\n')
-console.log('[ios] Native handoff, expiration, and rendered text regressions passed.')
+console.log('[ios] Native handoff, expiration, rendered text, export, shortcut, and touch ownership regressions passed.')

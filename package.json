@@ -18,6 +18,7 @@
     "test": "bun run test:unit",
     "test:release": "python3 -m unittest discover -s scripts -p test_check_ios_release.py",
     "test:native": "bun run scripts/check-ios-native-regressions.ts",
+    "test:browser-windows": "bun run scripts/check-ios-browser-windows.ts",
     "build:sounds": "bun run vendor/synthesize-notification-sound.ts",
     "typecheck": "tsc --noEmit",
     "test:unit": "bun test --isolate scripts",
