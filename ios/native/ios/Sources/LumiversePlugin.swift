@@ -159,6 +159,16 @@ class LumiversePlugin: Plugin {
         sheet.addAction(UIAlertAction(title: "Reload", style: .default) { [weak self] _ in
             if self?.nativeCache?.reload() != true { self?.webview?.reload() }
         })
+        // Keep recovery in UIKit so broken CSS/TSX cannot hide or replace it.
+        // Always offer both actions: client-side routing may remove the query
+        // while the frontend remains in safe theme mode until its next reload.
+        for (title, enabled) in [("Disable custom theme", true), ("Restore custom theme", false)] {
+            let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
+                self?.reloadTheme(recoveryEnabled: enabled)
+            }
+            action.isEnabled = remote
+            sheet.addAction(action)
+        }
         if NativeCache.available && remote {
             if nativeCache?.isActive == true {
                 sheet.addAction(UIAlertAction(title: "Use server frontend", style: .default) { [weak self] _ in self?.nativeCache?.useServerFrontend() })
@@ -191,6 +201,12 @@ class LumiversePlugin: Plugin {
         sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         anchor(sheet.popoverPresentationController, at: point, in: webview)
         controller.present(sheet, animated: true)
+    }
+
+    private func reloadTheme(recoveryEnabled: Bool) {
+        guard let webview = webview,
+              let url = NativeThemeRecovery.url(for: webview.url, enabled: recoveryEnabled) else { return }
+        if nativeCache?.reload(url: url) != true { webview.load(URLRequest(url: url)) }
     }
 
     private func showConnectionPage(history: Bool = false) {

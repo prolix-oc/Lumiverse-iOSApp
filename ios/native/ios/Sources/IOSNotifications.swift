@@ -81,7 +81,7 @@ final class IOSNotifications: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func register(_ completion: @escaping ([String: Any]?, String?) -> Void) {
-        guard enabled else { completion(nil, "This IPA is not configured for APNs. Rebuild with --push-notifications and an APNs-capable signing team."); return }
+        guard enabled else { completion(nil, "Notifications are unavailable in this installation. Install an updated Lumiverse app."); return }
         guard callbackError == nil else { completion(nil, callbackError); return }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { [weak self] granted, error in
             DispatchQueue.main.async {

@@ -157,7 +157,7 @@ try {
   const resultBundle = join(directory, 'http.xcresult')
   await run(['xcodebuild', '-quiet', 'test', '-project', 'lumiverse-ios-client.xcodeproj', '-scheme', 'LumiverseHTTPIntegration',
     '-configuration', 'release', '-destination', 'platform=iOS Simulator,id=' + simulator,
-    '-derivedDataPath', join(root, '.tmp/ios-xcode/simulator-push-widgets'), '-resultBundlePath', resultBundle,
+    '-derivedDataPath', join(root, '.tmp/ios-xcode/simulator'), '-resultBundlePath', resultBundle,
     '-parallel-testing-enabled', 'NO', 'CODE_SIGNING_ALLOWED=YES', 'CODE_SIGN_IDENTITY=-', 'CODE_SIGNING_REQUIRED=NO', 'LUMIVERSE_IOS_PREBUILT_RUST=1'])
   const container = await run(['xcrun', 'simctl', 'get_app_container', simulator, 'chat.lumiverse.ios', 'data'], true)
   const connection = JSON.parse(readFileSync(join(container, 'Library/Application Support/chat.lumiverse.ios/connection.json'), 'utf8'))

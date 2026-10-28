@@ -13,6 +13,12 @@ spec.loader.exec_module(release)
 
 
 class ReleaseChecks(unittest.TestCase):
+    def test_cli_requires_notifications_and_widgets_without_feature_flags(self):
+        for flags in ([], ["--push-notifications", "--widgets"]):
+            args = release.parse_args(["--artifact", "Lumiverse.ipa", *flags])
+            self.assertTrue(args.push_notifications)
+            self.assertTrue(args.widgets)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="lumiverse-release-test-")
         self.addCleanup(self.temp.cleanup)

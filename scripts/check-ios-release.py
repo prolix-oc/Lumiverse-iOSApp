@@ -225,18 +225,23 @@ def inspect_app(app, *, bundle_id="chat.lumiverse.ios", version=None, build_numb
             "distributionSigningVerified": app_store}
 
 
-def main():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--artifact", required=True, type=Path)
     parser.add_argument("--bundle-id", default="chat.lumiverse.ios")
     parser.add_argument("--version")
     parser.add_argument("--build-number")
-    parser.add_argument("--push-notifications", action="store_true")
-    parser.add_argument("--widgets", action="store_true")
+    # Accept old invocations, but always require these baseline features.
+    parser.add_argument("--push-notifications", action="store_true", default=True, help=argparse.SUPPRESS)
+    parser.add_argument("--widgets", action="store_true", default=True, help=argparse.SUPPRESS)
     parser.add_argument("--native-cache-preview", action="store_true")
     parser.add_argument("--app-store-connect", action="store_true")
     parser.add_argument("--notification-relay-url")
-    args = parser.parse_args()
+    return parser.parse_args(argv)
+
+
+def main():
+    args = parse_args()
     require(not args.app_store_connect or (args.version and args.build_number),
             "Distribution verification requires --version and --build-number")
     options = dict(bundle_id=args.bundle_id, version=args.version, build_number=args.build_number,
