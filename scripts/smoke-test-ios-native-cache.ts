@@ -7,8 +7,8 @@ const generated = join(root, 'ios/tauri/src-tauri/gen/apple')
 const index = process.argv.indexOf('--simulator')
 const simulator = process.argv[index + 1]
 if (index < 0 || !simulator || simulator.startsWith('--')) throw new Error('Specify --simulator UUID.')
-if (!existsSync(join(root, 'dist/ios/Lumiverse-simulator-native-cache-preview-push.app')))
-  throw new Error('Build first: bun run build:ios-client --simulator --debug --push-notifications --native-cache-preview')
+if (!existsSync(join(root, 'dist/ios/Lumiverse-simulator-native-cache-preview.app')))
+  throw new Error('Build first: bun run build:ios-client --simulator --debug --native-cache-preview')
 const env = { ...process.env, DEVELOPER_DIR: process.env.DEVELOPER_DIR || '/Applications/Xcode.app/Contents/Developer' }
 async function run(command: string[], capture = false) {
   const child = Bun.spawn(command, { cwd: generated, env, stdout: capture ? 'pipe' : 'inherit', stderr: 'inherit' })
@@ -60,7 +60,7 @@ try {
   const resultBundle = join(results, `results-${Date.now()}.xcresult`)
   await run(['xcodebuild', 'test', '-project', 'lumiverse-ios-client.xcodeproj', '-scheme', 'LumiverseNativeCacheIntegration',
     '-configuration', 'debug', '-destination', `platform=iOS Simulator,id=${simulator}`,
-    '-derivedDataPath', join(root, '.tmp/ios-xcode/simulator-native-cache-preview-push'), '-resultBundlePath', resultBundle,
+    '-derivedDataPath', join(root, '.tmp/ios-xcode/simulator-native-cache-preview'), '-resultBundlePath', resultBundle,
     'CODE_SIGNING_ALLOWED=NO', 'LUMIVERSE_IOS_PREBUILT_RUST=1', 'LUMIVERSE_IOS_EXPERIMENTAL_HIGH_REFRESH=0'])
   const container = await run(['xcrun', 'simctl', 'get_app_container', simulator, 'chat.lumiverse.ios', 'data'], true)
   const health = JSON.parse(readFileSync(join(container, 'Library/Application Support/NativeCache/status.json'), 'utf8'))

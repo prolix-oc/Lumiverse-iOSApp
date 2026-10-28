@@ -6,6 +6,17 @@ const setup = document.getElementById('connection-setup');
 const httpSettings = document.getElementById('http-settings');
 const allowInsecureHttp = document.getElementById('allow-insecure-http');
 const invoke = (command, args) => window.__TAURI_INTERNALS__.invoke(command, args);
+const historyPicker = createConnectionHistory({
+  select: entry => {
+    server.value = entry.server;
+    allowInsecureHttp.checked = usesHttp() && entry.allowInsecureHttp === true;
+    httpSettings.hidden = !usesHttp();
+    status.textContent = 'Server selected. Tap Connect to continue.';
+    button.focus();
+  },
+  forget: server => invoke('mobile_forget_connection', { server }),
+  report: message => { status.textContent = message; },
+});
 
 function usesHttp() {
   try { return new URL(server.value.trim()).protocol === 'http:'; } catch { return false; }
@@ -22,10 +33,12 @@ function showSetup(message = '') {
   button.disabled = false;
   server.disabled = false;
   allowInsecureHttp.disabled = false;
+  historyPicker.setBusy(false);
   httpSettings.hidden = !usesHttp();
 }
 
 async function connect(restore = false) {
+  if (button.disabled || historyPicker.isBusy()) return;
   if (usesHttp() && !allowInsecureHttp.checked) {
     showSetup('To connect over HTTP, enable Allow insecure HTTP for this server.');
     return;
@@ -33,6 +46,7 @@ async function connect(restore = false) {
   button.disabled = true;
   server.disabled = true;
   allowInsecureHttp.disabled = true;
+  historyPicker.setBusy(true);
   // Saved-server startup stays blank. An explicit connection keeps its form
   // in place so a short network round trip cannot flash a separate screen.
   setup.hidden = restore;
@@ -46,6 +60,7 @@ async function connect(restore = false) {
 
 form.addEventListener('submit', event => { event.preventDefault(); void connect(); });
 invoke('mobile_connection_info').then(info => {
+  historyPicker.update(info.history);
   if (info.server) {
     server.value = info.server;
     allowInsecureHttp.checked = usesHttp() && info.allowInsecureHttp === true;

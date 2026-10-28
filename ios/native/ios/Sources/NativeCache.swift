@@ -156,19 +156,19 @@ final class NativeCache {
         }
     }
 
-    func reload() -> Bool {
-        guard isActive, let url = webview?.url, NativeBridge.origin(url) == NativeBridge.origin(selected), !url.path.hasPrefix("/api/") else { return false }
-        load(server: url) { [weak self] loaded in if !loaded { self?.useServerFrontend() } }
+    func reload(url target: URL? = nil) -> Bool {
+        guard isActive, let url = target ?? webview?.url, NativeBridge.origin(url) == NativeBridge.origin(selected), !url.path.hasPrefix("/api/") else { return false }
+        load(server: url) { [weak self] loaded in if !loaded { self?.useServerFrontend(url: url) } }
         return true
     }
 
-    func useServerFrontend() {
+    func useServerFrontend(url target: URL? = nil) {
         healthCheck?.cancel()
         generation = UUID()
         isActive = false
         healthy = false
         writeDiagnostics()
-        guard let url = selected else { return }
+        guard let url = target ?? selected else { return }
         UserDefaults.standard.set(true, forKey: disabledKey(url))
         webview?.load(URLRequest(url: url))
     }

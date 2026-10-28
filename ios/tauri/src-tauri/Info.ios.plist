@@ -4,6 +4,10 @@
 <dict>
   <!-- All transport encryption uses Apple's URLSession/WebKit implementation. -->
   <key>ITSAppUsesNonExemptEncryption</key><false/>
+  <!-- Notifications, Live Activities, and widgets ship in every application build. -->
+  <key>LumiversePushEnabled</key><true/>
+  <key>LumiverseWidgetsEnabled</key><true/>
+  <key>NSSupportsLiveActivities</key><true/>
   <key>UIFileSharingEnabled</key><true/>
   <key>LSSupportsOpeningDocumentsInPlace</key><true/>
   <!-- Public ProMotion opt-in. WebKit's private override is a separate build feature. -->

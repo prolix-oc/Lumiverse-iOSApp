@@ -125,6 +125,18 @@ ${anchor}`);
 `;
 }
 
+/** Navigation shortcuts are in the host so they also ship without APNs/widgets. */
+export function configureIOSNavigationShortcuts(spec: string): string {
+  spec = spec.replace(/      # Lumiverse navigation shortcuts\n[\s\S]*?      # End Lumiverse navigation shortcuts\n/g, "");
+  const anchor = "      - path: lumiverse-ios-client_iOS";
+  if (!spec.includes(anchor)) throw new Error("Missing iOS application sources");
+  return spec.replace(anchor, `      # Lumiverse navigation shortcuts
+      - path: ../../../../navigation-intents
+      - path: ../../../../native/ios/Sources/NavigationShortcutInbox.swift
+      # End Lumiverse navigation shortcuts
+${anchor}`);
+}
+
 /** An extension with a newer deployment target leaves the iOS 15 host usable. */
 export function configureIOSLiveActivityExtension(spec: string, enabled: boolean): string {
   spec = spec.replace(/      # Lumiverse activity dependency\n[\s\S]*?      # End Lumiverse activity dependency\n/g, "")

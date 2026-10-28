@@ -2,7 +2,7 @@
 import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { zipSync, type Zippable } from "fflate";
-import { configureIOSBundleIdentity, configureIOSPushEntitlements, configureIOSNotificationExtension, configureIOSLiveActivityExtension, configureIOSWidgetExtension } from "./ios-entitlements";
+import { configureIOSBundleIdentity, configureIOSPushEntitlements, configureIOSNotificationExtension, configureIOSLiveActivityExtension, configureIOSWidgetExtension, configureIOSNavigationShortcuts } from "./ios-entitlements";
 import { buildIOSNativeCache } from "./build-ios-native-cache";
 import { assertIOSPlatformEncryption, configureIOSDistribution, iosDistributionOptions, iosExportOptions } from "./ios-distribution";
 import { flattenIOSAppIcons } from "./ios-icons";
@@ -15,10 +15,8 @@ const config = JSON.parse(readFileSync(join(project, "src-tauri/tauri.conf.json"
 const version: string = config.version;
 const simulator = args.has("--simulator"), unsigned = args.has("--unsigned") || simulator;
 const experimentalHighRefresh = args.has("--experimental-high-refresh");
-const pushNotifications = args.has("--push-notifications");
-const widgets = args.has("--widgets");
 const nativeCachePreview = args.has("--native-cache-preview");
-const artifactSuffix = (distribution.appStoreConnect ? "-app-store-connect" : "") + (nativeCachePreview ? "-native-cache-preview" : "") + (experimentalHighRefresh ? "-experimental-high-refresh" : "") + (pushNotifications ? "-push" : "") + (widgets ? "-widgets" : "");
+const artifactSuffix = (distribution.appStoreConnect ? "-app-store-connect" : "") + (nativeCachePreview ? "-native-cache-preview" : "") + (experimentalHighRefresh ? "-experimental-high-refresh" : "");
 const archivePath = join(generated, "build/arm64", unsigned ? "Lumiverse-unsigned.xcarchive" : distribution.appStoreConnect ? "Lumiverse-app-store-connect.xcarchive" : "Lumiverse.xcarchive");
 const exportPath = join(generated, "build/arm64", distribution.appStoreConnect ? "export-app-store-connect" : "export");
 if (process.platform !== "darwin") throw new Error("iOS builds require macOS and Xcode.");
@@ -99,32 +97,27 @@ const plist = Bun.spawn(["plutil", "-convert", "json", "-o", "-", join(project, 
   { env, stdout: "pipe", stderr: "inherit" });
 const properties = JSON.parse(await new Response(plist.stdout).text()) as Record<string, unknown>;
 if (await plist.exited !== 0) throw new Error("Could not read the iOS Info.plist.");
-properties.LumiversePushEnabled = pushNotifications;
-properties.LumiverseWidgetsEnabled = widgets;
-if (widgets) properties.LumiverseWidgetAppGroup = `group.${(Bun.YAML.parse(spec) as any).settingGroups.app.base.PRODUCT_BUNDLE_IDENTIFIER}.widgets`;
-properties.NSSupportsLiveActivities = pushNotifications;
-if (pushNotifications) properties.LumiverseActivityAppGroup = `group.${(Bun.YAML.parse(spec) as any).settingGroups.app.base.PRODUCT_BUNDLE_IDENTIFIER}.activities`;
-if (pushNotifications || widgets) properties.CFBundleURLTypes = [{ CFBundleURLName: "Lumiverse", CFBundleURLSchemes: ["lumiverse"] }];
-if (pushNotifications) properties.NSUserActivityTypes = ["INSendMessageIntent"];
-if (pushNotifications) {
-  const bundleId = (Bun.YAML.parse(spec) as any).settingGroups.app.base.PRODUCT_BUNDLE_IDENTIFIER;
-  properties.LumiverseNotificationKeychainGroup = `$(AppIdentifierPrefix)${bundleId}.notifications`;
-  properties.LumiverseAPNsRelayURL = process.env.LUMIVERSE_APNS_RELAY_URL || "https://apn-relay.lumiverse.chat";
-  const relayURL = new URL(properties.LumiverseAPNsRelayURL as string);
-  if (relayURL.protocol !== "https:" || relayURL.origin !== properties.LumiverseAPNsRelayURL || relayURL.username || relayURL.password)
-    throw new Error("LUMIVERSE_APNS_RELAY_URL must be an HTTPS origin.");
-}
+const bundleId = (Bun.YAML.parse(spec) as any).settingGroups.app.base.PRODUCT_BUNDLE_IDENTIFIER;
+properties.LumiverseWidgetAppGroup = `group.${bundleId}.widgets`;
+properties.LumiverseActivityAppGroup = `group.${bundleId}.activities`;
+properties.CFBundleURLTypes = [{ CFBundleURLName: "Lumiverse", CFBundleURLSchemes: ["lumiverse"] }];
+properties.NSUserActivityTypes = ["INSendMessageIntent"];
+properties.LumiverseNotificationKeychainGroup = `$(AppIdentifierPrefix)${bundleId}.notifications`;
+properties.LumiverseAPNsRelayURL = process.env.LUMIVERSE_APNS_RELAY_URL || "https://apn-relay.lumiverse.chat";
+const relayURL = new URL(properties.LumiverseAPNsRelayURL as string);
+if (relayURL.protocol !== "https:" || relayURL.origin !== properties.LumiverseAPNsRelayURL || relayURL.username || relayURL.password)
+  throw new Error("LUMIVERSE_APNS_RELAY_URL must be an HTTPS origin.");
 spec = spec.replace(/        # Lumiverse Info.plist\n[\s\S]*?        # End Lumiverse Info.plist\n/, "");
 const extraInfo = Object.entries(properties).map(([key, value]) => `        ${key}: ${JSON.stringify(value)}\n`).join("");
 spec = spec.replace("        LSRequiresIPhoneOS:", `        # Lumiverse Info.plist\n${extraInfo}        # End Lumiverse Info.plist\n        LSRequiresIPhoneOS:`);
-// Keep ordinary Personal Team builds usable. Push is explicit because Xcode must
-// provision this App ID with Apple's APNs capability before it can sign the IPA.
+// Notifications, Live Activities, and widgets are baseline application features.
 // XcodeGen rewrites this file from its `properties`; editing the generated plist
 // alone would silently remove the entitlement when the project is regenerated.
-spec = configureIOSPushEntitlements(spec, pushNotifications);
-spec = configureIOSNotificationExtension(spec, pushNotifications);
-spec = configureIOSLiveActivityExtension(spec, pushNotifications);
-spec = configureIOSWidgetExtension(spec, widgets);
+spec = configureIOSPushEntitlements(spec, true);
+spec = configureIOSNotificationExtension(spec, true);
+spec = configureIOSLiveActivityExtension(spec, true);
+spec = configureIOSWidgetExtension(spec, true);
+spec = configureIOSNavigationShortcuts(spec);
 writeFileSync(specPath, spec);
 await run(["xcodegen", "generate", "--spec", "project.yml"], generated);
 if (args.has("--prepare-only")) process.exit(0);
@@ -209,18 +202,17 @@ if (simulator) {
   await new Response(signature.stderr).text();
   if (await signature.exited !== 0) throw new Error("Could not verify the archived application's signing entitlements.");
   const signedForPush = /<key>aps-environment<\/key>\s*<string>(development|production)<\/string>/.test(signedEntitlements);
-  if (signedForPush !== pushNotifications) throw new Error("The signed app's APNs entitlement does not match this build's push configuration.");
+  if (!signedForPush) throw new Error("The signed app is missing its required APNs entitlement.");
   const signedForCommunication = /<key>com.apple.developer.usernotifications.communication<\/key>\s*<true\s*\/>/.test(signedEntitlements);
-  if (signedForCommunication !== pushNotifications) throw new Error("The signed app's Communication Notifications entitlement does not match this build's push configuration.");
+  if (!signedForCommunication) throw new Error("The signed app is missing its required Communication Notifications entitlement.");
   const ipas = find(exportPath, ".ipa");
   if (ipas.length !== 1) throw new Error("Xcode must export exactly one signed IPA.");
   if (distribution.appStoreConnect) {
     // Validate the fresh export before replacing the last successful candidate.
     await run(["python3", join(root, "scripts/check-ios-release.py"), "--artifact", ipas[0]!,
       "--app-store-connect", "--build-number", distribution.buildNumber!, "--version", version,
-      "--bundle-id", config.identifier, ...(pushNotifications ? ["--push-notifications"] : []),
-      ...(widgets ? ["--widgets"] : []),
-      ...(pushNotifications ? ["--notification-relay-url", properties.LumiverseAPNsRelayURL as string] : []),
+      "--bundle-id", config.identifier,
+      "--notification-relay-url", properties.LumiverseAPNsRelayURL as string,
       ...(nativeCachePreview ? ["--native-cache-preview"] : [])], root);
   }
   artifact = join(out, `lumiverse-ios-arm64${artifactSuffix}.ipa`); copyFileSync(ipas[0]!, artifact);
@@ -231,8 +223,8 @@ const metadata = { artifact: relative(root, artifact), target: simulator ? "aarc
   distribution: distribution.appStoreConnect ? "app-store-connect" : "development",
   ...(distribution.buildNumber ? { buildNumber: distribution.buildNumber } : {}),
   experimentalHighRefresh,
-  pushNotifications,
-  widgets,
+  pushNotifications: true,
+  widgets: true,
   nativeCachePreview,
   ...(nativeCacheManifest ? { nativeCacheManifest } : {}),
   ...(simulator ? {} : { sha256: new Bun.CryptoHasher("sha256").update(readFileSync(artifact)).digest("hex") }) };

@@ -3,5 +3,5 @@
   "description": "Only the packaged connection screen can read and change the saved server.",
   "windows": ["main"],
   "local": true,
-  "permissions": ["allow-mobile-connection-info", "allow-mobile-connect"]
+  "permissions": ["allow-mobile-connection-info", "allow-mobile-connect", "allow-mobile-forget-connection"]
 }

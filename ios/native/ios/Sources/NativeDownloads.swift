@@ -7,9 +7,11 @@ final class NativeDownloads: NSObject, WKNavigationDelegate, WKDownloadDelegate 
     private weak var webview: WKWebView?
     private let original: WKNavigationDelegate?
     private var active: [ObjectIdentifier: (download: WKDownload, temporary: URL, filename: String)] = [:]
+    private let exports: NativeExportPresenter
 
     init(webview: WKWebView) {
         self.webview = webview
+        exports = NativeExportPresenter(view: webview)
         original = webview.navigationDelegate
         super.init()
         webview.navigationDelegate = self
@@ -53,7 +55,7 @@ final class NativeDownloads: NSObject, WKNavigationDelegate, WKDownloadDelegate 
         suggestedFilename: String, completionHandler: @escaping (URL?) -> Void) {
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             completionHandler(nil)
-            showResult(filename: Self.safeFilename(suggestedFilename), success: false)
+            exports.showResult(filename: Self.safeFilename(suggestedFilename), success: false)
             return
         }
         let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("lumiverse-export-" + UUID().uuidString)
@@ -88,26 +90,17 @@ final class NativeDownloads: NSObject, WKNavigationDelegate, WKDownloadDelegate 
                 number += 1
             }
             try files.moveItem(at: item.temporary, to: destination)
-            showResult(filename: destination.lastPathComponent, success: true)
+            exports.showResult(filename: destination.lastPathComponent, success: true, fileURL: destination)
         } catch {
             try? FileManager.default.removeItem(at: item.temporary)
-            showResult(filename: item.filename, success: false)
+            exports.showResult(filename: item.filename, success: false)
         }
     }
 
     func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
         guard let item = active.removeValue(forKey: ObjectIdentifier(download)) else { return }
         try? FileManager.default.removeItem(at: item.temporary)
-        showResult(filename: item.filename, success: false)
+        exports.showResult(filename: item.filename, success: false)
     }
 
-    private func showResult(filename: String, success: Bool) {
-        guard let controller = webview?.window?.rootViewController, controller.presentedViewController == nil else { return }
-        let deviceFolder = UIDevice.current.userInterfaceIdiom == .pad ? "On My iPad" : "On My iPhone"
-        let alert = UIAlertController(title: success ? "Export saved" : "Export failed",
-            message: success ? "\(filename)\nFiles → \(deviceFolder) → Lumiverse" : "Could not save \(filename). Check your connection and available storage, then try again.",
-            preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .default))
-        controller.present(alert, animated: true)
-    }
 }

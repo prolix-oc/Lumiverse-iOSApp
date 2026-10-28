@@ -3,7 +3,7 @@ import UIKit
 import WebKit
 
 /// UIKit controls and a narrowly scoped WebKit permission bridge.
-class LumiversePlugin: Plugin, UIGestureRecognizerDelegate {
+class LumiversePlugin: Plugin {
     struct ActivityURL: Decodable { let url: String }
     @objc public func openWidgetURL(_ invoke: Invoke) throws {
         let args = try invoke.parseArgs(ActivityURL.self)
@@ -20,7 +20,7 @@ class LumiversePlugin: Plugin, UIGestureRecognizerDelegate {
     private var downloads: NativeDownloads?
     private weak var webview: WKWebView?
     private var observation: NSKeyValueObservation?
-    private var menuGesture: UILongPressGestureRecognizer?
+    private var menuGesture: AppControlsGesture?
     private var accessibilityButton: UIButton?
     private var connectionURL = URL(string: "tauri://localhost/index.html")!
     #if LUMIVERSE_DEBUG || LUMIVERSE_EXPERIMENTAL_HIGH_REFRESH
@@ -56,11 +56,7 @@ class LumiversePlugin: Plugin, UIGestureRecognizerDelegate {
             }
         }
         #endif
-        let gesture = UILongPressGestureRecognizer(target: self, action: #selector(openControls(_:)))
-        gesture.numberOfTouchesRequired = 2
-        gesture.minimumPressDuration = 0.65
-        gesture.allowableMovement = 18
-        gesture.delegate = self
+        let gesture = AppControlsGesture { [weak self] point in self?.showControls(at: point) }
         webview.addGestureRecognizer(gesture)
         menuGesture = gesture
 
@@ -136,17 +132,6 @@ class LumiversePlugin: Plugin, UIGestureRecognizerDelegate {
         if let button = accessibilityButton { webview?.bringSubviewToFront(button) }
     }
 
-    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
-        shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        // WebKit's own recognizers should keep normal scrolling and zooming.
-        gestureRecognizer === menuGesture || otherGestureRecognizer === menuGesture
-    }
-
-    @objc private func openControls(_ gesture: UILongPressGestureRecognizer) {
-        guard gesture.state == .began, let webview = webview else { return }
-        showControls(at: gesture.location(in: webview))
-    }
-
     @objc private func openAccessibleControls() {
         guard let button = accessibilityButton else { return }
         showControls(at: CGPoint(x: button.frame.midX, y: button.frame.midY))
@@ -174,6 +159,16 @@ class LumiversePlugin: Plugin, UIGestureRecognizerDelegate {
         sheet.addAction(UIAlertAction(title: "Reload", style: .default) { [weak self] _ in
             if self?.nativeCache?.reload() != true { self?.webview?.reload() }
         })
+        // Keep recovery in UIKit so broken CSS/TSX cannot hide or replace it.
+        // Always offer both actions: client-side routing may remove the query
+        // while the frontend remains in safe theme mode until its next reload.
+        for (title, enabled) in [("Disable custom theme", true), ("Restore custom theme", false)] {
+            let action = UIAlertAction(title: title, style: .default) { [weak self] _ in
+                self?.reloadTheme(recoveryEnabled: enabled)
+            }
+            action.isEnabled = remote
+            sheet.addAction(action)
+        }
         if NativeCache.available && remote {
             if nativeCache?.isActive == true {
                 sheet.addAction(UIAlertAction(title: "Use server frontend", style: .default) { [weak self] _ in self?.nativeCache?.useServerFrontend() })
@@ -198,14 +193,27 @@ class LumiversePlugin: Plugin, UIGestureRecognizerDelegate {
         sheet.addAction(measure)
         #endif
         sheet.addAction(UIAlertAction(title: "Change server", style: .default) { [weak self] _ in
-            guard let self = self else { return }
-            var components = URLComponents(url: self.connectionURL, resolvingAgainstBaseURL: false)!
-            components.queryItems = [URLQueryItem(name: "changeServer", value: "1")]
-            self.webview?.load(URLRequest(url: components.url!))
+            self?.showConnectionPage()
+        })
+        sheet.addAction(UIAlertAction(title: "Connection history", style: .default) { [weak self] _ in
+            self?.showConnectionPage(history: true)
         })
         sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel))
         anchor(sheet.popoverPresentationController, at: point, in: webview)
         controller.present(sheet, animated: true)
+    }
+
+    private func reloadTheme(recoveryEnabled: Bool) {
+        guard let webview = webview,
+              let url = NativeThemeRecovery.url(for: webview.url, enabled: recoveryEnabled) else { return }
+        if nativeCache?.reload(url: url) != true { webview.load(URLRequest(url: url)) }
+    }
+
+    private func showConnectionPage(history: Bool = false) {
+        var components = URLComponents(url: connectionURL, resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "changeServer", value: "1")]
+        if history { components.queryItems?.append(URLQueryItem(name: "history", value: "1")) }
+        webview?.load(URLRequest(url: components.url!))
     }
 
     private func anchor(_ popover: UIPopoverPresentationController?, at point: CGPoint, in webview: WKWebView) {

@@ -7,7 +7,9 @@ import WebKit
 final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     private weak var webview: WKWebView?
     private let speech = NativeSpeech()
+    private var haptics: NativeHaptics?
     private var mediaDelegate: MediaPermissionDelegate?
+    private var browserWindows: NativeBrowserWindows?
     private var loading: NSKeyValueObservation?
     private var lifecycleObservers: [NSObjectProtocol] = []
     private let cache: NativeCache?
@@ -21,13 +23,22 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         let delegate = MediaPermissionDelegate(forwarding: webview.uiDelegate)
         mediaDelegate = delegate
         webview.uiDelegate = delegate
+        browserWindows = NativeBrowserWindows(webview: webview)
         webview.configuration.userContentController.addScriptMessageHandler(self, contentWorld: .page, name: "lumiverseNative")
         loading = webview.observe(\.isLoading, options: [.new]) { [weak self] view, _ in
-            if view.isLoading { self?.speech.cancel() }
+            if view.isLoading {
+                self?.speech.cancel()
+                self?.browserWindows?.closeAll()
+            }
             Task { @MainActor in IOSWidgets.shared.selectedOriginChanged() }
             if #available(iOS 16.1, *) { Task { @MainActor in await IOSLiveActivities.shared.selectedOriginChanged() } }
         }
         IOSNotifications.shared.attach(webview: webview)
+        lifecycleObservers.append(NotificationCenter.default.addObserver(forName: NavigationShortcutInbox.changed,
+            object: nil, queue: .main) { [weak webview] _ in
+            webview?.callAsyncJavaScript("window.dispatchEvent(new Event('lumiverse:ios-shortcut'))",
+                arguments: [:], in: nil, in: .page, completionHandler: nil)
+        })
         Task { @MainActor in IOSWidgets.shared.attach(webview) }
         if #available(iOS 16.1, *) { Task { @MainActor in IOSLiveActivities.shared.attach(webview) } }
         // This wrapper uses scenes. Observe the WebView's own scene so a
@@ -85,6 +96,23 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         }
         let payload = body["payload"] as? [String: Any] ?? [:]
         switch action {
+        case "haptics.play":
+            Task { @MainActor in
+                guard webview.window?.isKeyWindow == true else { replyHandler(["played": false], nil); return }
+                if self.haptics == nil { self.haptics = NativeHaptics() }
+                replyHandler(["played": self.haptics?.play(payload["feedback"] as? String ?? "") ?? false], nil)
+            }
+        case "shortcuts.pending":
+            // Only the active window may consume a system navigation request.
+            guard webview.window?.isKeyWindow == true,
+                  webview.window?.windowScene?.activationState == .foregroundActive else {
+                replyHandler(NSNull(), nil); return
+            }
+            if let request = NavigationShortcutInbox.pending() {
+                replyHandler(["id": request.id.uuidString, "action": request.action.rawValue], nil)
+            } else { replyHandler(NSNull(), nil) }
+        case "shortcuts.ack":
+            replyHandler(["acknowledged": NavigationShortcutInbox.acknowledge(payload["id"] as? String ?? "")], nil)
         case "cache.status": replyHandler(cache?.status ?? ["available": false, "active": false], nil)
         case "cache.ready": replyHandler(["accepted": cache?.markHealthy(buildId: payload["buildId"] as? String ?? "") ?? false], nil)
         case "lifecycle.status": replyHandler(["state": appState(in: webview)], nil)
