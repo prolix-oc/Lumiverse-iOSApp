@@ -162,6 +162,10 @@ targets:
       expect(parsed.targets.LumiverseLiveActivity.info.properties.NSExtension.NSExtensionPointIdentifier).toBe('com.apple.widgetkit-extension');
       expect(parsed.targets.LumiverseLiveActivity.sources).toContain('../../../../native/ios/Sources/GenerationActivityAttributes.swift');
       expect(parsed.targets.LumiverseLiveActivity.sources).toContain('../../../../activity-intents');
+      expect(parsed.targets.LumiverseLiveActivity.sources).toContain('../../../../native/ios/Sources/SpindleActivityAttributes.swift');
+      expect(parsed.targets.LumiverseLiveActivity.sources).toContain('../../../../native/ios/Sources/NotificationSecurity.swift');
+      expect(parsed.targets.LumiverseLiveActivity.entitlements.properties['keychain-access-groups']).toEqual(['$(AppIdentifierPrefix)chat.lumiverse.ios.notifications']);
+      expect(parsed.targets.LumiverseLiveActivity.info.properties.LumiverseNotificationKeychainGroup).toBe('$(AppIdentifierPrefix)chat.lumiverse.ios.notifications');
       expect(parsed.targets.LumiverseLiveActivity.settings.base.SWIFT_ACTIVE_COMPILATION_CONDITIONS).toContain('LUMIVERSE_ACTIVITY_EXTENSION');
       expect(parsed.targets.LumiverseLiveActivity.entitlements.properties['com.apple.security.application-groups']).toEqual(['group.chat.lumiverse.ios.activities']);
       expect(parsed.targets.LumiverseLiveActivity.info.properties.LumiverseActivityAppGroup).toBe('group.chat.lumiverse.ios.activities');

@@ -4,7 +4,7 @@ import WidgetKit
 
 @main
 struct LumiverseActivities: WidgetBundle {
-    var body: some Widget { GenerationLiveActivity() }
+    var body: some Widget { GenerationLiveActivity(); SpindleLiveActivity() }
 }
 
 private struct ActivityPresentation {

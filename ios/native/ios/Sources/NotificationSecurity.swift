@@ -50,6 +50,10 @@ enum NotificationSecurity {
     }
     static func remove(_ account: String) { if let query = try? query(account) { SecItemDelete(query as CFDictionary) } }
     static func digest(_ value: Data) -> String { SHA256.hash(data: value).map { String(format: "%02x", $0) }.joined() }
+    static func spindleActivityKey(credential: String, registrationId: String) -> Data {
+        let hash = Data(SHA256.hash(data: Data(credential.utf8)))
+        return Data(HMAC<SHA256>.authenticationCode(for: Data("lumiverse-spindle-activity:v1:\(registrationId)".utf8), using: SymmetricKey(data: hash)))
+    }
     static func random() -> String {
         let key = SymmetricKey(size: .bits256).withUnsafeBytes { Data($0) }
         return key.base64EncodedString().replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")

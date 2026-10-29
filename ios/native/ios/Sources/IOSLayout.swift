@@ -7,6 +7,7 @@ final class IOSLayout: UIView {
     private var lastGeometry: NSDictionary?
     private var revision = 0
     private var hingeStatus = "unknown"
+    private var isFoldable = false
 
     init(webview: WKWebView) {
         self.webview = webview
@@ -19,6 +20,9 @@ final class IOSLayout: UIView {
         if #available(iOS 27.1, *) {
             addInteraction(UIHingeInteraction { [weak self] _, update in
                 guard let self else { return }
+                // A nil hinge can mean this view left the hierarchy. Once
+                // observed, retain the device capability on its outer display.
+                if update.hinge != nil { self.isFoldable = true }
                 switch update.hinge?.status {
                 case .closed?: self.hingeStatus = "closed"
                 case .partiallyOpen?: self.hingeStatus = "partiallyOpen"
@@ -56,7 +60,7 @@ final class IOSLayout: UIView {
             "version": 1, "width": view.bounds.width, "height": view.bounds.height,
             "horizontalSizeClass": view.traitCollection.horizontalSizeClass.rawValue,
             "verticalSizeClass": view.traitCollection.verticalSizeClass.rawValue,
-            "hingeStatus": hingeStatus,
+            "hingeStatus": hingeStatus, "isFoldable": isFoldable,
             "safeArea": ["top": insets.top, "right": insets.right, "bottom": insets.bottom, "left": insets.left],
             "divisions": [], "occlusions": []
         ]

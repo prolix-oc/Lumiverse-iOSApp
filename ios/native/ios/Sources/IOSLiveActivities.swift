@@ -136,7 +136,9 @@ final class IOSLiveActivities: NSObject, URLSessionTaskDelegate {
             },
             "deviceId": IOSNotifications.shared.installation["deviceId"]!,
             "bundleId": IOSNotifications.shared.installation["bundleId"]!,
-            "environment": IOSNotifications.shared.installation["environment"]!]
+            "environment": IOSNotifications.shared.installation["environment"]!,
+            "spindleAvailable": IOSSpindleLiveActivities.shared.available,
+            "spindleRegistrationIds": IOSSpindleLiveActivities.shared.registrationIds]
     }
     func configure(accountId: String?, enabled: Bool) async {
         let origin = NativeBridge.origin(webview?.url)

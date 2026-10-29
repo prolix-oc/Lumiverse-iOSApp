@@ -181,15 +181,19 @@ ${sourcesAnchor}`);
       - ../../../../activity-intents
       - ../../../../native/ios/Sources/GenerationActivityAttributes.swift
       - ../../../../native/ios/Sources/GenerationActivityAvatar.swift
+      - ../../../../native/ios/Sources/SpindleActivityAttributes.swift
+      - ../../../../native/ios/Sources/NotificationSecurity.swift
     entitlements:
       path: LumiverseLiveActivity/LumiverseLiveActivity.entitlements
       properties:
         com.apple.security.application-groups: [group.${bundleId}.activities]
+        keychain-access-groups: ["$(AppIdentifierPrefix)${bundleId}.notifications"]
     info:
       path: LumiverseLiveActivity/Info.plist
       properties:
         CFBundleDisplayName: Lumiverse
         LumiverseActivityAppGroup: group.${bundleId}.activities
+        LumiverseNotificationKeychainGroup: "$(AppIdentifierPrefix)${bundleId}.notifications"
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:

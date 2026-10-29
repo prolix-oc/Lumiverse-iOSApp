@@ -31,7 +31,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                 self?.browserWindows?.closeAll()
             }
             Task { @MainActor in IOSWidgets.shared.selectedOriginChanged() }
-            if #available(iOS 16.1, *) { Task { @MainActor in await IOSLiveActivities.shared.selectedOriginChanged() } }
+            if #available(iOS 16.1, *) { Task { @MainActor in await IOSLiveActivities.shared.selectedOriginChanged(); await IOSSpindleLiveActivities.shared.configure(accountId: nil, enabled: false) } }
         }
         IOSNotifications.shared.attach(webview: webview)
         lifecycleObservers.append(NotificationCenter.default.addObserver(forName: NavigationShortcutInbox.changed,
@@ -40,7 +40,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                 arguments: [:], in: nil, in: .page, completionHandler: nil)
         })
         Task { @MainActor in IOSWidgets.shared.attach(webview) }
-        if #available(iOS 16.1, *) { Task { @MainActor in IOSLiveActivities.shared.attach(webview) } }
+        if #available(iOS 16.1, *) { Task { @MainActor in IOSLiveActivities.shared.attach(webview); IOSSpindleLiveActivities.shared.attach(webview) } }
         // This wrapper uses scenes. Observe the WebView's own scene so a
         // foreground transition in another window cannot restore its presence.
         for (name, state) in [(UIScene.didActivateNotification, "active"),
@@ -51,7 +51,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                       scene === webview.window?.windowScene else { return }
                 if state == "active" {
                     IOSNotifications.shared.refreshRegistration()
-                    if #available(iOS 16.1, *) { Task { @MainActor in IOSLiveActivities.shared.resume() } }
+                    if #available(iOS 16.1, *) { Task { @MainActor in IOSLiveActivities.shared.resume(); IOSSpindleLiveActivities.shared.resume() } }
                 }
                 webview.callAsyncJavaScript("window.dispatchEvent(new CustomEvent('lumiverse:ios-app-state', {detail: detail}))",
                     arguments: ["detail": ["state": state]], in: nil, in: .page, completionHandler: nil)
@@ -134,13 +134,17 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
             guard let origin = NotificationSecurity.browserOrigin(webview.url) else { replyHandler(nil, "Select a server first."); return }
             IOSNotifications.shared.register(delivery: payload["delivery"] as? String ?? "direct", relayURL: payload["relayUrl"] as? String,
                 origin: origin) { result, error in replyHandler(result, error) }
-        case "activities.status", "activities.configure", "activities.start", "activities.reconcile":
+        case "activities.status", "activities.configure", "activities.start", "activities.reconcile", "activities.spindleSync":
             guard #available(iOS 16.1, *) else { replyHandler(["available": false], nil); return }
             Task { @MainActor in
                 switch action {
                 case "activities.configure":
                     await IOSLiveActivities.shared.configure(accountId: payload["accountId"] as? String, enabled: payload["enabled"] as? Bool ?? false)
+                    await IOSSpindleLiveActivities.shared.configure(accountId: payload["accountId"] as? String, enabled: payload["enabled"] as? Bool ?? false)
                     replyHandler(IOSLiveActivities.shared.status(), nil)
+                case "activities.spindleSync":
+                    do { try await IOSSpindleLiveActivities.shared.synchronize(payload); replyHandler(["ok": true], nil) }
+                    catch { replyHandler(nil, "Could not synchronize extension Live Activities.") }
                 case "activities.start":
                     do { replyHandler(try await IOSLiveActivities.shared.start(payload), nil) }
                     catch { replyHandler(nil, error.localizedDescription) }

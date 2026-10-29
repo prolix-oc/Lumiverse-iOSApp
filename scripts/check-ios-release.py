@@ -186,7 +186,7 @@ def inspect_app(app, *, bundle_id="chat.lumiverse.ios", version=None, build_numb
             entitlements = plistlib.loads(command(["codesign", "-d", "--entitlements", ":-", str(bundle)]))
             profile = plistlib.loads(command(["security", "cms", "-D", "-i", str(bundle / "embedded.mobileprovision")]))
             teams.add(check_distribution_identity(child, entitlements, profile))
-            if relay_url is not None and (bundle == app or child["CFBundleIdentifier"].endswith(".NotificationService")):
+            if relay_url is not None and (bundle == app or child["CFBundleIdentifier"].endswith((".NotificationService", ".LiveActivity"))):
                 check_notification_keychain(child, entitlements, profile, bundle_id)
             if bundle == app:
                 require(entitlements.get("aps-environment") == ("production" if push else None),
