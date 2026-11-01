@@ -35,6 +35,16 @@ The updated server frontend uses native iPhone haptics for long-press menus and
 hold-to-queue. Completed exports offer **Share…**, plus **Preview** for formats
 supported by Quick Look, while keeping the saved copy in Files.
 
+The image cache saves compressed, immutable `/api/v1/images/:id` raster responses
+in the app's Caches directory, including separate `sm`, `lg`, and original tiers.
+It is capped at 128 MiB / 512 entries, 2 MiB per image, and seven days. Entries
+are isolated by server, account, and HttpOnly session cookie; logout drops frontend
+blobs and attempts to clear the current disk scope. WebKit still fetches cache
+misses with its own authentication. A failed lookup or image decode uses the
+ordinary image URL. Mutable avatar resolvers, remote proxies, and videos retain
+their existing browser path. Both the updated frontend and a rebuilt iOS app are
+required; older wrappers continue using ordinary images.
+
 Extension authorization and provider PKCE sign-in open in a native browser
 window inside the app. Redirects retain the browser session, and the window
 closes when authorization finishes. Use its Close button to cancel and return
@@ -90,6 +100,7 @@ bun run test:release
 bun run typecheck
 bun run test:native --simulator SIMULATOR_UUID
 bun run test:browser-windows --simulator SIMULATOR_UUID
+bun run test:media-cache --simulator SIMULATOR_UUID
 ```
 
 Swift unit checks require macOS/Xcode. Device/simulator smoke tests are under

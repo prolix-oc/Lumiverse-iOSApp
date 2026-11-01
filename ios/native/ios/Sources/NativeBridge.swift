@@ -13,12 +13,14 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     private var loading: NSKeyValueObservation?
     private var lifecycleObservers: [NSObjectProtocol] = []
     private let cache: NativeCache?
+    private let mediaCache = NativeMediaCache.shared
     private var layout: IOSLayout?
 
     init(webview: WKWebView, cache: NativeCache? = nil) {
         self.webview = webview
         self.cache = cache
         super.init()
+        MediaLoadingProbe.shared.attach(webview)
         layout = IOSLayout(webview: webview)
         let delegate = MediaPermissionDelegate(forwarding: webview.uiDelegate)
         mediaDelegate = delegate
@@ -96,6 +98,8 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         }
         let payload = body["payload"] as? [String: Any] ?? [:]
         switch action {
+        case "mediaCache.read", "mediaCache.write", "mediaCache.remove", "mediaCache.clear":
+            mediaCache.handle(action, payload: payload, webview: webview, reply: replyHandler)
         case "haptics.play":
             Task { @MainActor in
                 guard webview.window?.isKeyWindow == true else { replyHandler(["played": false], nil); return }
