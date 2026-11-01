@@ -13,12 +13,7 @@ final class NativeMediaCache {
         store = NativeMediaCacheStore(root: root)
     }
 
-    func handle(_ action: String, payload: [String: Any], webview: WKWebView, reply replyHandler: @escaping (Any?, String?) -> Void) {
-        let started = MediaLoadingProbe.timestamp
-        let reply: (Any?, String?) -> Void = { value, error in
-            if let error = error { MediaLoadingProbe.shared.record(["event": action + ".error", "at": started, "error": error]) }
-            replyHandler(value, error)
-        }
+    func handle(_ action: String, payload: [String: Any], webview: WKWebView, reply: @escaping (Any?, String?) -> Void) {
         guard pending < 12, let origin = webview.url, let canonical = NativeServerOrigin.canonical(origin),
               let account = payload["accountId"] as? String, !account.isEmpty, account.utf8.count <= 256 else { reply(nil, "Media cache unavailable."); return }
         let key = (payload["url"] as? String).flatMap { NativeMediaCacheStore.imageKey($0, origin: origin) }
@@ -29,7 +24,6 @@ final class NativeMediaCache {
         }
         pending += 1
         webview.configuration.websiteDataStore.httpCookieStore.getAllCookies { [weak self, weak webview] cookies in
-            let cookiesReady = MediaLoadingProbe.timestamp
             guard let self = self else { reply(nil, "Media cache unavailable."); return }
             guard let webview = webview, NativeServerOrigin.canonical(webview.url) == canonical,
                   let scope = NativeMediaCacheStore.scope(origin: origin, account: account, cookies: cookies) else {
@@ -39,7 +33,6 @@ final class NativeMediaCache {
                 self.pending -= 1; reply(nil, "Media cache session changed."); return
             }
             self.queue.async { [weak webview] in
-                let diskStarted = MediaLoadingProbe.timestamp
                 let result: [String: Any]
                 switch action {
                 case "mediaCache.read":
@@ -53,7 +46,6 @@ final class NativeMediaCache {
                 case "mediaCache.clear": self.store.clear(scope: scope); result = ["cleared": true]
                 default: result = [:]
                 }
-                let diskReady = MediaLoadingProbe.timestamp
                 DispatchQueue.main.async { [weak webview] in
                     guard let webview = webview, NativeServerOrigin.canonical(webview.url) == canonical else {
                         self.pending -= 1; reply(nil, "Media cache server changed."); return
@@ -63,10 +55,6 @@ final class NativeMediaCache {
                         self.pending -= 1
                         guard NativeServerOrigin.canonical(webview.url) == canonical,
                               NativeMediaCacheStore.scope(origin: origin, account: account, cookies: cookies) == scope else { reply(nil, "Media cache session changed."); return }
-                        MediaLoadingProbe.shared.record(["event": action, "at": started,
-                            "cookieMs": cookiesReady - started, "queueMs": diskStarted - cookiesReady,
-                            "diskMs": diskReady - diskStarted, "totalMs": MediaLoadingProbe.timestamp - started,
-                            "hit": result["data"] != nil, "stored": result["stored"] ?? false])
                         reply(result, nil)
                     }
                 }

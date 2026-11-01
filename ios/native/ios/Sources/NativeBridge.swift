@@ -15,13 +15,14 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
     private let cache: NativeCache?
     private let mediaCache = NativeMediaCache.shared
     private var layout: IOSLayout?
+    private var deviceMotion: NativeDeviceMotion?
 
     init(webview: WKWebView, cache: NativeCache? = nil) {
         self.webview = webview
         self.cache = cache
         super.init()
-        MediaLoadingProbe.shared.attach(webview)
         layout = IOSLayout(webview: webview)
+        deviceMotion = NativeDeviceMotion(webview: webview)
         let delegate = MediaPermissionDelegate(forwarding: webview.uiDelegate)
         mediaDelegate = delegate
         webview.uiDelegate = delegate
@@ -30,6 +31,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         loading = webview.observe(\.isLoading, options: [.new]) { [weak self] view, _ in
             if view.isLoading {
                 self?.speech.cancel()
+                self?.deviceMotion?.stop()
                 self?.browserWindows?.closeAll()
             }
             Task { @MainActor in IOSWidgets.shared.selectedOriginChanged() }
@@ -55,6 +57,7 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
                     IOSNotifications.shared.refreshRegistration()
                     if #available(iOS 16.1, *) { Task { @MainActor in IOSLiveActivities.shared.resume(); IOSSpindleLiveActivities.shared.resume() } }
                 }
+                self?.deviceMotion?.updateActivity(isActive: state == "active")
                 webview.callAsyncJavaScript("window.dispatchEvent(new CustomEvent('lumiverse:ios-app-state', {detail: detail}))",
                     arguments: ["detail": ["state": state]], in: nil, in: .page, completionHandler: nil)
             })
@@ -98,6 +101,11 @@ final class NativeBridge: NSObject, WKScriptMessageHandlerWithReply {
         }
         let payload = body["payload"] as? [String: Any] ?? [:]
         switch action {
+        case "motion.start":
+            replyHandler(deviceMotion?.start(id: payload["id"] as? String ?? "") ?? ["available": false], nil)
+        case "motion.stop":
+            deviceMotion?.stop(id: payload["id"] as? String ?? "")
+            replyHandler(["stopped": true], nil)
         case "mediaCache.read", "mediaCache.write", "mediaCache.remove", "mediaCache.clear":
             mediaCache.handle(action, payload: payload, webview: webview, reply: replyHandler)
         case "haptics.play":
